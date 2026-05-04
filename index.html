@@ -10,8 +10,6 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- SheetJS for Excel Parsing -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <!-- FontAwesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <script>
         tailwind.config = {
@@ -35,6 +33,7 @@
         .tab-content { display: none; }
         .tab-content.active { display: block; animation: fadeIn 0.3s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        
         /* Custom Scrollbar */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: #f1f1f1; }
@@ -51,6 +50,19 @@
             border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        /* Drag and Drop styles */
+        .dragging { opacity: 0.5; background-color: #e2e8f0; }
+        .drag-over { border-top: 2px solid #3b82f6; }
+
+        /* Dual Range Slider Styles */
+        .dual-slider-container { position: relative; width: 100%; height: 32px; display: flex; align-items: center; }
+        .slider-track { position: absolute; height: 6px; background: #e2e8f0; width: 100%; border-radius: 3px; z-index: 1; }
+        .slider-range { position: absolute; height: 6px; background: #3b82f6; border-radius: 3px; z-index: 2; pointer-events: none; }
+        .dual-slider-input { position: absolute; width: 100%; appearance: none; background: transparent; pointer-events: none; outline: none; z-index: 3; margin: 0; }
+        .dual-slider-input::-webkit-slider-thumb { appearance: none; width: 18px; height: 18px; background: #ffffff; border: 2px solid #3b82f6; border-radius: 50%; cursor: pointer; pointer-events: auto; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+        .dual-slider-input::-moz-range-thumb { appearance: none; width: 18px; height: 18px; background: #ffffff; border: 2px solid #3b82f6; border-radius: 50%; cursor: pointer; pointer-events: auto; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+        .dual-slider-input:active::-webkit-slider-thumb { background: #eff6ff; transform: scale(1.1); }
     </style>
 </head>
 <body class="text-slate-800 antialiased flex flex-col min-h-screen">
@@ -73,11 +85,14 @@
                     <button class="tab-btn active pb-4 px-1 text-sm font-medium text-slate-500 hover:text-slate-700 whitespace-nowrap" data-target="dashboard">
                         <i class="fa-solid fa-border-all mr-1"></i> Dashboard
                     </button>
-                    <button class="tab-btn pb-4 px-1 text-sm font-medium text-slate-500 hover:text-slate-700 whitespace-nowrap" data-target="trend">
-                        <i class="fa-solid fa-chart-area mr-1"></i> Trend
+                    <button class="tab-btn pb-4 px-1 text-sm font-medium text-slate-500 hover:text-slate-700 whitespace-nowrap" data-target="historical">
+                        <i class="fa-solid fa-chart-area mr-1"></i> Historical
                     </button>
                     <button class="tab-btn pb-4 px-1 text-sm font-medium text-slate-500 hover:text-slate-700 whitespace-nowrap" data-target="upload">
                         <i class="fa-solid fa-file-arrow-up mr-1"></i> Upload Data
+                    </button>
+                    <button class="tab-btn pb-4 px-1 text-sm font-medium text-slate-500 hover:text-slate-700 whitespace-nowrap" data-target="methodology">
+                        <i class="fa-solid fa-book-open mr-1"></i> Methodology
                     </button>
                     <button class="tab-btn pb-4 px-1 text-sm font-medium text-slate-500 hover:text-slate-700 whitespace-nowrap" data-target="settings">
                         <i class="fa-solid fa-gear mr-1"></i> Settings
@@ -108,24 +123,36 @@
 
             <!-- Detail Table -->
             <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-                <div class="px-6 py-4 border-b border-slate-100 bg-slate-50">
-                    <h3 class="font-bold text-slate-800">Portfolio VaR & Risk Contributions (US$M)</h3>
+                <div class="px-6 py-4 border-b border-slate-100 bg-slate-50 flex justify-between items-start">
+                    <h3 class="font-bold text-slate-800 mt-1">Portfolio VaR & Risk Contributions (US$M)</h3>
+                    <div class="text-xs text-slate-500 text-right leading-relaxed">
+                        <span class="text-danger font-medium">* Funds with positions &lt; $0.1M are excluded.</span><br>
+                        * Fund rows are draggable to reorder.
+                    </div>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="min-w-full divide-y divide-slate-200">
                         <thead class="bg-white">
                             <tr>
-                                <th class="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider w-1/4">Asset / Category</th>
-                                <th class="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Position (US$M)</th>
-                                <th class="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">VaR (US$M)</th>
-                                <th class="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">VaR (%)</th>
-                                <th class="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider w-1/4">1Y Range (Low - Avg - Curr - High)</th>
+                                <th class="px-4 py-2 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Asset / Category</th>
+                                <th class="px-4 py-2 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Position (US$M)</th>
+                                <th class="px-4 py-2 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider min-w-[140px]">VaR (US$M)</th>
+                                <th class="px-4 py-2 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">VaR (%)</th>
+                                <th class="px-4 py-2 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                    1Y Range <br>
+                                    <span class="text-[10px] font-normal text-slate-400 capitalize normal-case tracking-normal">(Low - <span class="inline-block w-2 h-2 bg-slate-400 rounded-full mx-0.5"></span>Avg - <span class="inline-block w-2 h-2 bg-blue-500 rounded-full mx-0.5"></span>Curr - High)</span>
+                                </th>
+                                <th class="px-4 py-2 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Div. Effect</th>
                             </tr>
                         </thead>
                         <tbody id="detail-table-body" class="bg-white divide-y divide-slate-200">
                             <!-- Rows inserted by JS -->
                         </tbody>
                     </table>
+                </div>
+                <!-- Footnotes Area -->
+                <div id="div-footnotes" class="px-6 py-3 bg-white text-xs text-danger font-medium border-t border-slate-100 hidden flex flex-col space-y-1">
+                    <!-- Footnotes inserted by JS -->
                 </div>
             </div>
 
@@ -138,21 +165,31 @@
             </div>
         </div>
 
-        <!-- TAB: Trend -->
-        <div id="trend" class="tab-content space-y-6">
+        <!-- TAB: Historical Trend -->
+        <div id="historical" class="tab-content space-y-6">
             <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
-                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 space-y-3 sm:space-y-0">
+                <div class="flex flex-col xl:flex-row justify-between items-start xl:items-center mb-6 space-y-4 xl:space-y-0">
                     <h2 class="text-xl font-bold text-slate-800">VaR Historical Trend</h2>
-                    <div class="flex items-center space-x-3">
-                        <label class="text-sm font-medium text-slate-700">End Date:</label>
-                        <input type="date" id="trend-as-of-date" class="border border-slate-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent">
-                        <button onclick="App.renderTrendChart()" class="text-sm text-white bg-accent px-3 py-1.5 rounded hover:bg-blue-600 transition"><i class="fa-solid fa-arrows-rotate mr-1"></i>Refresh Chart</button>
+                    
+                    <!-- Power BI style Dual Slider & Date Inputs -->
+                    <div class="flex-grow xl:max-w-2xl xl:ml-8 bg-slate-50 p-3 rounded-lg border border-slate-200 w-full">
+                        <div class="flex items-center space-x-4 mb-2">
+                            <input type="date" id="hist-start-date" onchange="App.syncDatesToSliders()" class="w-1/2 border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-accent bg-white">
+                            <span class="text-slate-400 text-xs font-bold uppercase">To</span>
+                            <input type="date" id="hist-end-date" onchange="App.syncDatesToSliders()" class="w-1/2 border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-accent bg-white">
+                        </div>
+                        <div class="dual-slider-container px-2">
+                            <div class="slider-track"></div>
+                            <div class="slider-range" id="hist-slider-range"></div>
+                            <input type="range" id="hist-start-slider" class="dual-slider-input" oninput="App.syncSlidersToDates('start')">
+                            <input type="range" id="hist-end-slider" class="dual-slider-input" oninput="App.syncSlidersToDates('end')">
+                        </div>
                     </div>
                 </div>
-                <div class="relative h-96 w-full">
+                <div class="relative h-[500px] w-full">
                     <canvas id="trendChart"></canvas>
                 </div>
-                <p class="text-xs text-slate-500 mt-4 text-center">Note: This chart recalculates historical VaR for the trailing 250 days from the selected End Date, showcasing the dynamic changes in risk exposure.</p>
+                <p class="text-xs text-slate-500 mt-4 text-center">Note: This chart recalculates historical VaR dynamically for each day within the selected range (multiplying the scaled simulated returns by that day's position).</p>
             </div>
         </div>
 
@@ -174,7 +211,7 @@
                             <h3 class="text-lg font-bold text-slate-700"><i class="fa-solid fa-1 text-accent mr-2"></i>1. Fund Data</h3>
                             <button onclick="App.downloadSample('fund')" class="text-xs text-blue-600 hover:text-blue-800 underline pointer-events-auto"><i class="fa-solid fa-download mr-1"></i>Download Sample</button>
                         </div>
-                        <p class="text-sm text-slate-500 mb-3 relative z-10 pointer-events-none">Format required: Columns must be <code>Date</code>, <code>Fund</code>, <code>Field</code> (NAV/Deposit/Withdraw), <code>Amount</code>. Date format YYYY-MM-DD.</p>
+                        <p class="text-sm text-slate-500 mb-3 relative z-10 pointer-events-none">Format required: Columns must be <code>Date</code>, <code>Fund</code>, <code>Field</code> (NAV/Deposit/Withdraw), <code>Amount</code>. Date format YYYY-MM-DD. <br><span class="text-accent">* The NAV amount will be treated directly as the total Position in USD.</span></p>
                         <div class="text-center relative z-10 pointer-events-none mt-4">
                             <i class="fa-solid fa-cloud-arrow-up text-3xl text-slate-400 mb-2"></i>
                             <p class="text-sm text-slate-600 font-medium">Drag and drop file here, or click to browse</p>
@@ -194,7 +231,7 @@
                             <h3 class="text-lg font-bold text-slate-700"><i class="fa-solid fa-2 text-accent mr-2"></i>2. FX Positions</h3>
                             <button onclick="App.downloadSample('fxPos')" class="text-xs text-blue-600 hover:text-blue-800 underline pointer-events-auto"><i class="fa-solid fa-download mr-1"></i>Download Sample</button>
                         </div>
-                        <p class="text-sm text-slate-500 mb-3 relative z-10 pointer-events-none">Format required: Columns must include <code>Date</code>, <code>USD</code>, <code>EUR</code>, <code>JPY</code>. Values are USD equivalent amounts.</p>
+                        <p class="text-sm text-slate-500 mb-3 relative z-10 pointer-events-none">Format required: Columns must include <code>Date</code>, <code>USD</code>, <code>EUR</code>, <code>JPY</code>. Values are in <strong>Millions</strong> of native currency.</p>
                         <div class="text-center relative z-10 pointer-events-none mt-4">
                             <i class="fa-solid fa-cloud-arrow-up text-3xl text-slate-400 mb-2"></i>
                             <p class="text-sm text-slate-600 font-medium">Drag and drop file here, or click to browse</p>
@@ -259,6 +296,74 @@
                 </div>
             </div>
         </div>
+        
+        <!-- TAB: Methodology -->
+        <div id="methodology" class="tab-content space-y-6">
+            <div class="bg-white p-8 rounded-xl shadow-sm border border-slate-100 max-w-5xl mx-auto">
+                <h2 class="text-2xl font-bold text-slate-800 mb-6 border-b pb-4">Risk Methodology & Calculation Mechanics</h2>
+                
+                <div class="space-y-8 text-slate-700 leading-relaxed text-sm">
+                    
+                    <section>
+                        <h3 class="text-lg font-bold text-slate-800 mb-3 flex items-center"><i class="fa-solid fa-chart-line text-accent mr-2"></i>1. EWMA Volatility-Updating Historical Simulation</h3>
+                        <p class="mb-3">
+                            The dashboard employs <strong>Hull's Volatility-Updating Historical Simulation</strong> model. Traditional historical simulation reacts slowly to sudden market shocks. By updating historical returns with current volatility, the model ensures that the simulated distribution reflects the current market environment.
+                        </p>
+                        <ul class="list-disc pl-6 space-y-2 mb-3">
+                            <li><strong>Step 1:</strong> Calculate daily simple returns for all assets: <code>Return(t) = P(t) / P(t-1) - 1</code>.</li>
+                            <li><strong>Step 2:</strong> Estimate daily variance using the <strong>Exponentially Weighted Moving Average (EWMA)</strong> model. The variance for day <em>t</em> is updated as: <br>
+                                <code>&sigma;²(t) = &lambda; &times; &sigma;²(t-1) + (1 - &lambda;) &times; Return(t-1)²</code><br>
+                                By default, <code>&lambda; = 0.94</code> (RiskMetrics standard).
+                            </li>
+                            <li><strong>Step 3:</strong> Scale the historical returns to reflect current market conditions: <br>
+                                <code>Scaled Return(i) = Historical Return(i) &times; (&sigma;_current / &sigma;_historical_i)</code>
+                            </li>
+                        </ul>
+                    </section>
+
+                    <section>
+                        <h3 class="text-lg font-bold text-slate-800 mb-3 flex items-center"><i class="fa-solid fa-cube text-primary mr-2"></i>2. Fund VaR Calculation</h3>
+                        <p class="mb-3">
+                            For Mutual Funds, the uploaded <strong>NAV (Net Asset Value)</strong> directly represents the total Position in USD. Cashflows (Deposits and Withdrawals) adjust the internal position, but the primary risk factor is the NAV percentage change.
+                        </p>
+                        <div class="bg-slate-50 p-4 rounded-md border border-slate-200 mb-3">
+                            <strong>Calculation per historical scenario <em>i</em>:</strong><br>
+                            <code>Simulated PnL(i) = -1 &times; Position(current) &times; Scaled Return(i)</code><br>
+                            <em>(A positive PnL denotes a loss. If the position is Long and Return is negative, it results in a Loss.)</em>
+                        </div>
+                        <p>
+                            To compute the standalone <strong>Fund VaR</strong>, we sort the <code>Simulated PnL</code> array descendingly and extract the 95th or 99th percentile value based on the Lookback Window.
+                        </p>
+                    </section>
+
+                    <section>
+                        <h3 class="text-lg font-bold text-slate-800 mb-3 flex items-center"><i class="fa-solid fa-coins text-success mr-2"></i>3. FX Position Netting & Portfolio VaR (Crucial)</h3>
+                        <p class="mb-3">
+                            Managing FX risk requires rigorous <strong>Cash Flow Mapping</strong> and <strong>Netting</strong>. Holding foreign currency implies an underlying short position against the base currency (USD). The dashboard automatically isolates the pure USD exposure to accurately capture diversification benefits.
+                        </p>
+                        <div class="bg-blue-50 p-5 rounded-md border border-blue-100">
+                            <h4 class="font-bold text-blue-900 mb-2">Example Scenario:</h4>
+                            <ul class="list-disc pl-5 space-y-1 mb-4 text-blue-800">
+                                <li><strong>Uploaded USD Position:</strong> -500M (Short USD)</li>
+                                <li><strong>Uploaded EUR Position:</strong> +100M EUR (Long EUR vs USD)</li>
+                                <li><strong>Uploaded JPY Position:</strong> +50M JPY (Long JPY vs USD)</li>
+                            </ul>
+                            <p class="mb-2 text-blue-900">
+                                Being Long EUR means you are holding EUR and structurally Short USD. The system calculates the true underlying Net USD exposure before applying the simulation:
+                            </p>
+                            <code class="block bg-white p-2 rounded text-xs text-slate-700 border border-slate-200">
+                                True Net USD Position = Raw USD (-500) + EUR equivalent in USD (+100) + JPY equivalent in USD (+50)<br>
+                                True Net USD Position = -350M USD
+                            </code>
+                            <p class="mt-3 text-blue-900">
+                                In the <strong>Total FX VaR</strong> calculation, the engine uses this <code>-350M</code> net exposure. If the USD appreciates, the Net USD position will experience losses/gains simultaneously with the EUR and JPY legs. Aggregating these PnLs across all assets <em>before</em> taking the percentile perfectly captures empirical correlation and <strong>Diversification Effect</strong>.
+                            </p>
+                        </div>
+                    </section>
+
+                </div>
+            </div>
+        </div>
 
         <!-- TAB: Settings -->
         <div id="settings" class="tab-content space-y-6">
@@ -266,6 +371,16 @@
                 <h2 class="text-2xl font-bold text-slate-800 mb-6 border-b pb-4">VaR Methodology Settings</h2>
                 
                 <div class="space-y-6">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Position Decimals</label>
+                        <select id="set-pos-decimals" class="w-full border border-slate-300 rounded-md px-3 py-2 focus:ring-accent focus:border-accent">
+                            <option value="0" selected>0 (No decimals)</option>
+                            <option value="1">1 Decimal</option>
+                            <option value="2">2 Decimals</option>
+                            <option value="3">3 Decimals</option>
+                        </select>
+                        <p class="text-xs text-slate-500 mt-1">Number of decimal places used to format Position amount (does not apply to VaR).</p>
+                    </div>
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">EWMA Decay Factor (Lambda, λ)</label>
                         <input type="number" id="set-lambda" step="0.01" min="0.8" max="0.99" value="0.94" class="w-full border border-slate-300 rounded-md px-3 py-2 focus:ring-accent focus:border-accent">
@@ -279,8 +394,8 @@
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">Confidence Level</label>
                         <select id="set-confidence" class="w-full border border-slate-300 rounded-md px-3 py-2 focus:ring-accent focus:border-accent">
-                            <option value="0.95">95%</option>
-                            <option value="0.99" selected>99%</option>
+                            <option value="0.95" selected>95%</option>
+                            <option value="0.99">99%</option>
                             <option value="0.999">99.9%</option>
                         </select>
                         <p class="text-xs text-slate-500 mt-1">Determines the percentile for VaR extraction.</p>
@@ -307,53 +422,228 @@
         // --- Core App State & Logic ---
         const App = {
             state: {
-                dates: [], // YYYY-MM-DD
-                assets: {}, // { name: { type: 'fund'|'fx', returns: [], prices: [], positions: [], ewmaVars: [] } }
-                rawData: { fund: null, fxPos: null, fxMkt: null }, // Store raw JSON for preview/copy
+                dates: [], 
+                assets: {}, 
+                rawData: { fund: null, fxPos: null, fxMkt: null }, 
                 settings: {
                     lambda: 0.94,
                     lookback: 250,
-                    confidence: 0.99
+                    confidence: 0.95,
+                    posDecimals: 0
                 },
                 currentDateIndex: 0,
                 trendData: { dates: [], total: [], fund: [], fx: [] },
-                chartInstance: null
+                chartInstance: null,
+                fundOrder: [],
+                sliderTimeout: null
             },
 
             // Format helpers
+            formatPos: (num) => {
+                if(num === undefined || isNaN(num) || num === null) return '-';
+                const sign = num < 0 ? '-' : '';
+                const dec = App.state.settings.posDecimals;
+                return sign + (Math.abs(num) / 1e6).toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+            },
             formatAmt: (num) => {
-                if(num === undefined || isNaN(num)) return '-';
-                return (num / 1e6).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                if(num === undefined || isNaN(num) || num === null) return '-';
+                const sign = num < 0 ? '-' : '';
+                return sign + (Math.abs(num) / 1e6).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             },
             formatPct: (num) => {
-                if(num === undefined || isNaN(num)) return '-';
-                return (num * 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
+                if(num === undefined || isNaN(num) || num === null) return '-';
+                return (Math.abs(num) * 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
+            },
+            formatDiv: (num) => {
+                if(num === undefined || isNaN(num) || num === null || num === 0) return '0.0%';
+                return num.toFixed(1) + '%';
             },
             showLoading: () => document.getElementById('loading-overlay').style.display = 'flex',
             hideLoading: () => document.getElementById('loading-overlay').style.display = 'none',
+
+            // UI Render Helpers
+            renderRangeBarPct: (min, max, avg, curr) => {
+                const safeRange = max - min === 0 ? 1 : max - min;
+                const avgPct = max - min === 0 ? 50 : Math.max(0, Math.min(100, ((avg - min) / safeRange) * 100));
+                const currPct = max - min === 0 ? 50 : Math.max(0, Math.min(100, ((curr - min) / safeRange) * 100));
+                
+                return `
+                    <div class="flex items-center w-full min-w-[160px] ml-auto">
+                        <span class="text-[11px] text-slate-500 w-12 text-right mr-2 font-medium tracking-tight">${App.formatPct(min)}</span>
+                        <div class="relative flex-grow h-1.5 bg-slate-200 rounded">
+                            <div class="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 bg-slate-400 rounded-full shadow-sm z-10 cursor-help" style="left: calc(${avgPct}% - 5px);" title="Average: ${App.formatPct(avg)}"></div>
+                            <div class="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-blue-500 rounded-full shadow-sm border border-white z-20 cursor-help" style="left: calc(${currPct}% - 6px);" title="Current: ${App.formatPct(curr)}"></div>
+                        </div>
+                        <span class="text-[11px] text-slate-500 w-12 text-left ml-2 font-medium tracking-tight">${App.formatPct(max)}</span>
+                    </div>
+                `;
+            },
+
+            renderRangeBarAmt: (min, max, avg, curr) => {
+                const safeRange = max - min === 0 ? 1 : max - min;
+                const avgPct = max - min === 0 ? 50 : Math.max(0, Math.min(100, ((avg - min) / safeRange) * 100));
+                const currPct = max - min === 0 ? 50 : Math.max(0, Math.min(100, ((curr - min) / safeRange) * 100));
+                
+                return `
+                    <div class="flex items-center w-full min-w-[160px] ml-auto">
+                        <span class="text-[11px] text-slate-500 w-12 text-right mr-2 font-medium tracking-tight">${App.formatAmt(min)}</span>
+                        <div class="relative flex-grow h-1.5 bg-slate-200 rounded">
+                            <div class="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 bg-slate-400 rounded-full shadow-sm z-10 cursor-help" style="left: calc(${avgPct}% - 5px);" title="Average: ${App.formatAmt(avg)}M"></div>
+                            <div class="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-blue-500 rounded-full shadow-sm border border-white z-20 cursor-help" style="left: calc(${currPct}% - 6px);" title="Current: ${App.formatAmt(curr)}M"></div>
+                        </div>
+                        <span class="text-[11px] text-slate-500 w-12 text-left ml-2 font-medium tracking-tight">${App.formatAmt(max)}</span>
+                    </div>
+                `;
+            },
+
+            downloadSample: (type) => {
+                const wb = XLSX.utils.book_new();
+                let ws_data;
+                if(type === 'fund') {
+                    ws_data = [
+                        ['Date', 'Fund', 'Field', 'Amount'],
+                        ['2025-01-02', 'Global Equity Fund', 'NAV', 10000000],
+                        ['2025-01-03', 'Global Equity Fund', 'NAV', 10050000],
+                        ['2025-01-04', 'Global Equity Fund', 'Deposit', 200000],
+                        ['2025-01-04', 'Global Equity Fund', 'NAV', 10320000]
+                    ];
+                } else if (type === 'fxPos') {
+                    ws_data = [
+                        ['Date', 'USD', 'EUR', 'JPY'],
+                        ['2025-01-02', -500, 100, 50],
+                        ['2025-01-03', -500, 100, 50]
+                    ];
+                } else {
+                    ws_data = [
+                        ['Date', 'USD', 'EUR', 'JPY'],
+                        ['2025-01-02', 31.5, 1.08, 150.0],
+                        ['2025-01-03', 31.6, 1.09, 149.5]
+                    ];
+                }
+                const ws = XLSX.utils.aoa_to_sheet(ws_data);
+                XLSX.utils.book_append_sheet(wb, ws, "Sample");
+                XLSX.writeFile(wb, `Sample_${type}_Data.xlsx`);
+            },
+
+            renderPreview: (id, dataArray) => {
+                if (!dataArray || dataArray.length === 0) return;
+                const header = Object.keys(dataArray[0]).join('\t');
+                const rows = dataArray.slice(0, 50).map(obj => Object.values(obj).join('\t')).join('\n'); 
+                document.getElementById(`preview-${id}`).textContent = header + '\n' + rows;
+            },
+
+            copyData: (type) => {
+                const dataArray = App.state.rawData[type];
+                if (!dataArray || dataArray.length === 0) {
+                    alert('No data available to copy.'); return;
+                }
+                const header = Object.keys(dataArray[0]).join('\t');
+                const rows = dataArray.map(obj => Object.values(obj).join('\t')).join('\n');
+                const tsv = header + '\n' + rows;
+                
+                const ta = document.createElement('textarea');
+                ta.value = tsv;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+                
+                alert('Copied to clipboard!');
+            },
 
             // Init App
             init: async () => {
                 App.setupTabs();
                 App.showLoading();
                 
-                // Load mock data if no upload
+                document.getElementById('set-pos-decimals').value = App.state.settings.posDecimals;
+
                 await App.generateMockData();
                 
                 App.processDataAlignments();
                 App.precalculateEWMA();
                 
-                // Set default dates
                 const dateInput = document.getElementById('as-of-date');
-                const trendDateInput = document.getElementById('trend-as-of-date');
                 const lastDate = App.state.dates[App.state.dates.length - 1];
-                const minDate = App.state.dates[App.state.settings.lookback];
+                const minDateStr = App.state.dates[App.state.settings.lookback];
 
-                dateInput.max = lastDate; dateInput.min = minDate; dateInput.value = lastDate;
-                trendDateInput.max = lastDate; trendDateInput.min = minDate; trendDateInput.value = lastDate;
+                dateInput.max = lastDate; dateInput.min = minDateStr; dateInput.value = lastDate;
+                
+                // Initialize Sliders
+                const startSlider = document.getElementById('hist-start-slider');
+                const endSlider = document.getElementById('hist-end-slider');
+                
+                startSlider.min = App.state.settings.lookback;
+                startSlider.max = App.state.dates.length - 1;
+                endSlider.min = App.state.settings.lookback;
+                endSlider.max = App.state.dates.length - 1;
+                
+                let startIdx = Math.max(App.state.settings.lookback, App.state.dates.length - 250);
+                let endIdx = App.state.dates.length - 1;
+                
+                startSlider.value = startIdx;
+                endSlider.value = endIdx;
+                
+                App.syncSlidersToDates('init');
 
                 await App.updateDashboard();
+                App.replaceIcons();
                 App.hideLoading();
+            },
+
+            // --- Historical Trend Dual Slider Logic ---
+            syncSlidersToDates: (source) => {
+                const startSlider = document.getElementById('hist-start-slider');
+                const endSlider = document.getElementById('hist-end-slider');
+                const startDateInput = document.getElementById('hist-start-date');
+                const endDateInput = document.getElementById('hist-end-date');
+                const trackRange = document.getElementById('hist-slider-range');
+
+                let startVal = parseInt(startSlider.value);
+                let endVal = parseInt(endSlider.value);
+
+                // Prevent crossover
+                if (startVal > endVal) {
+                    if (source === 'start') { startSlider.value = endVal; startVal = endVal; }
+                    else { endSlider.value = startVal; endVal = startVal; }
+                }
+
+                startDateInput.value = App.state.dates[startVal];
+                endDateInput.value = App.state.dates[endVal];
+
+                const min = parseInt(startSlider.min);
+                const max = parseInt(startSlider.max);
+                const percent1 = ((startVal - min) / (max - min)) * 100;
+                const percent2 = ((endVal - min) / (max - min)) * 100;
+                
+                trackRange.style.left = percent1 + '%';
+                trackRange.style.width = (percent2 - percent1) + '%';
+                
+                if (source !== 'init') {
+                    clearTimeout(App.state.sliderTimeout);
+                    App.state.sliderTimeout = setTimeout(() => {
+                        App.renderTrendChart();
+                    }, 300); // Debounce chart re-render
+                }
+            },
+
+            syncDatesToSliders: () => {
+                const startDateInput = document.getElementById('hist-start-date');
+                const endDateInput = document.getElementById('hist-end-date');
+                const startSlider = document.getElementById('hist-start-slider');
+                const endSlider = document.getElementById('hist-end-slider');
+                
+                let sIdx = App.state.dates.indexOf(startDateInput.value);
+                let eIdx = App.state.dates.indexOf(endDateInput.value);
+                
+                if(sIdx !== -1 && eIdx !== -1) {
+                    if(sIdx > eIdx) sIdx = eIdx;
+                    if(sIdx < parseInt(startSlider.min)) sIdx = parseInt(startSlider.min);
+                    
+                    startSlider.value = sIdx;
+                    endSlider.value = eIdx;
+                    App.syncSlidersToDates('date');
+                }
             },
 
             setupTabs: () => {
@@ -366,20 +656,23 @@
                         btn.classList.add('active', 'text-primary', 'border-b-2', 'border-primary');
                         document.getElementById(btn.dataset.target).classList.add('active');
                         
-                        if(btn.dataset.target === 'trend' && App.state.trendData.dates.length === 0) {
+                        if(btn.dataset.target === 'historical' && App.state.trendData.dates.length === 0) {
                             App.renderTrendChart();
+                        }
+                        if(btn.dataset.target === 'historical' && App.state.chartInstance) {
+                            setTimeout(() => App.state.chartInstance.resize(), 50);
                         }
                     });
                 });
             },
 
-            // --- Core Algorithm: VaR Calculation (Hull Volatility Updating Historical Simulation) ---
+            // --- Core Algorithm: VaR Calculation (Hull Volatility Updating Historical Simulation using Simple Returns) ---
             calculateVaRForDate: (dateIndex, lookback, confidence, specificType = null, getComponents = false) => {
-                if (dateIndex < lookback) return null; // Insufficient history
+                if (dateIndex < lookback) return null;
 
                 const assets = Object.keys(App.state.assets);
                 const simulatedLosses = [];
-                const componentsMap = {}; // Record individual asset VaR
+                const componentsMap = {}; 
 
                 for (let i = 0; i < lookback; i++) {
                     const histIndex = dateIndex - lookback + i;
@@ -388,76 +681,87 @@
 
                     assets.forEach(asset => {
                         const data = App.state.assets[asset];
-                        const currentPosition = data.positions[dateIndex];
-                        if (currentPosition <= 0) return; // Skip zero positions
+                        const standalonePos = data.positions[dateIndex];
+                        const portfolioPos = data.portfolioPositions ? data.portfolioPositions[dateIndex] : standalonePos;
+                        
+                        if (standalonePos === 0 && portfolioPos === 0) return; 
+                        if (data.type === 'fund' && Math.abs(standalonePos) < 100000) return;
 
-                        // Volatility Scaling (Hull's Method)
-                        const currentVol = Math.sqrt(data.ewmaVars[dateIndex - 1] || 0.0001); // t-1 EWMA as expected volatility for t
+                        const currentVol = Math.sqrt(data.ewmaVars[dateIndex - 1] || 0.0001); 
                         const histVol = Math.sqrt(data.ewmaVars[histIndex - 1] || currentVol);
                         
+                        // Using Simple Returns for simulation mapping
                         let rawReturn = data.returns[histIndex];
-                        // Scale return
                         let scaledReturn = rawReturn * (currentVol / histVol);
                         
-                        // Simulate tomorrow's price and loss
-                        let simulatedLoss = currentPosition - (currentPosition * Math.exp(scaledReturn));
-                        
-                        totalLoss += simulatedLoss;
-                        
-                        if (specificType && data.type === specificType) {
-                            typeLoss += simulatedLoss;
+                        // 1. Calculate Portfolio Loss (Matching VBA: Loss = -1 * Position * SimpleRet_Scaled)
+                        if (portfolioPos !== 0) {
+                            let simLossAmtPort = -1 * portfolioPos * scaledReturn;
+                            totalLoss += simLossAmtPort;
+                            if (specificType && data.type === specificType) {
+                                typeLoss += simLossAmtPort;
+                            }
                         }
 
-                        if (getComponents) {
-                            if (!componentsMap[asset]) componentsMap[asset] = [];
-                            componentsMap[asset].push(simulatedLoss);
+                        // 2. Calculate Standalone Loss Percentage (For Individual Components Map)
+                        if (getComponents && standalonePos !== 0) {
+                            let simLossAmtStd = -1 * standalonePos * scaledReturn;
+                            let simLossPctStd = simLossAmtStd / Math.abs(standalonePos);
+                            
+                            if (!componentsMap[asset]) componentsMap[asset] = { pct: [] };
+                            componentsMap[asset].pct.push(simLossPctStd);
                         }
                     });
 
                     simulatedLosses.push(specificType ? typeLoss : totalLoss);
                 }
 
-                // Sort and find percentile
+                // Percentile extraction for Portfolios
                 simulatedLosses.sort((a, b) => b - a);
                 const percentileIndex = lookback * (1 - confidence);
-                // Linear interpolation
                 const idx1 = Math.floor(percentileIndex);
                 const idx2 = Math.ceil(percentileIndex);
+                const weight = percentileIndex - idx1;
+                
                 let varAmount = 0;
                 if(idx1 === idx2) {
                     varAmount = simulatedLosses[idx1];
                 } else {
-                    const weight = percentileIndex - idx1;
                     varAmount = simulatedLosses[idx1] * (1 - weight) + simulatedLosses[idx2] * weight;
                 }
 
-                // Return individual components if requested
-                let componentsVaR = {};
+                // Process Individual Components
                 if (getComponents) {
+                    let componentsVaR = {};
+                    let componentsVaRPct = {};
                     for (let asset in componentsMap) {
-                        componentsMap[asset].sort((a, b) => b - a);
-                        componentsVaR[asset] = componentsMap[asset][idx1] * (1 - (percentileIndex - idx1)) + (componentsMap[asset][idx2] || 0) * (percentileIndex - idx1);
+                        componentsMap[asset].pct.sort((a, b) => b - a);
+                        let pctVar = 0;
+                        if(idx1 === idx2) {
+                            pctVar = componentsMap[asset].pct[idx1];
+                        } else {
+                            pctVar = componentsMap[asset].pct[idx1] * (1 - weight) + (componentsMap[asset].pct[idx2] || 0) * weight;
+                        }
+                        componentsVaRPct[asset] = pctVar;
+                        componentsVaR[asset] = pctVar * Math.abs(App.state.assets[asset].positions[dateIndex]);
                     }
-                    return { total: Math.max(0, varAmount), components: componentsVaR };
+                    return { total: Math.max(0, varAmount), components: componentsVaR, componentsPct: componentsVaRPct };
                 }
 
-                return Math.max(0, varAmount); // VaR typically non-negative
+                return Math.max(0, varAmount); 
             },
 
-            // Pre-calculate EWMA Variance for all assets
             precalculateEWMA: () => {
                 const lambda = App.state.settings.lambda;
                 for (const key in App.state.assets) {
                     const asset = App.state.assets[key];
                     asset.ewmaVars = new Array(asset.returns.length).fill(0);
                     
-                    // Init Variance (Sample var of first 30 days)
                     let sumSq = 0;
                     let initDays = Math.min(30, asset.returns.length);
                     for(let i=0; i<initDays; i++) sumSq += asset.returns[i] * asset.returns[i];
                     asset.ewmaVars[initDays-1] = sumSq / initDays || 0.0001;
 
-                    // Recursive EWMA calculation
                     for (let i = initDays; i < asset.returns.length; i++) {
                         const prevVar = asset.ewmaVars[i - 1];
                         const prevRet = asset.returns[i - 1];
@@ -466,16 +770,63 @@
                 }
             },
 
+            // --- Drag and Drop Handlers for Funds ---
+            handleDragStart: (e) => {
+                e.target.classList.add('dragging');
+                e.dataTransfer.setData('text/plain', e.target.getAttribute('data-name'));
+                e.dataTransfer.effectAllowed = 'move';
+            },
+            handleDragOver: (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+            },
+            handleDragEnter: (e) => {
+                e.preventDefault();
+                const tr = e.target.closest('tr');
+                if (tr && tr.hasAttribute('draggable')) {
+                    tr.classList.add('drag-over');
+                }
+            },
+            handleDragLeave: (e) => {
+                const tr = e.target.closest('tr');
+                if (tr && tr.hasAttribute('draggable')) {
+                    tr.classList.remove('drag-over');
+                }
+            },
+            handleDrop: (e) => {
+                e.preventDefault();
+                const sourceName = e.dataTransfer.getData('text/plain');
+                const tr = e.target.closest('tr');
+                
+                document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+                document.querySelectorAll('.dragging').forEach(el => el.classList.remove('dragging'));
+
+                if (tr && tr.hasAttribute('draggable')) {
+                    const targetName = tr.getAttribute('data-name');
+                    if (sourceName !== targetName) {
+                        const sourceIdx = App.state.fundOrder.indexOf(sourceName);
+                        const targetIdx = App.state.fundOrder.indexOf(targetName);
+                        
+                        if (sourceIdx !== -1 && targetIdx !== -1) {
+                            App.state.fundOrder.splice(sourceIdx, 1);
+                            App.state.fundOrder.splice(targetIdx, 0, sourceName);
+                            App.updateDashboard(true);
+                        }
+                    }
+                }
+            },
+
             // --- Dashboard Update ---
-            updateDashboard: async () => {
-                App.showLoading();
-                // Allow UI thread to render loading state
-                await new Promise(r => setTimeout(r, 50)); 
+            updateDashboard: async (skipLoading = false) => {
+                if (!skipLoading) {
+                    App.showLoading();
+                    await new Promise(r => setTimeout(r, 50)); 
+                }
 
                 const dateStr = document.getElementById('as-of-date').value;
                 const dateIndex = App.state.dates.indexOf(dateStr);
                 if (dateIndex === -1 || dateIndex < App.state.settings.lookback) {
-                    alert("Invalid date selected or insufficient history to calculate VaR (Need at least " + App.state.settings.lookback + " days).");
+                    alert("Invalid date selected or insufficient history to calculate VaR.");
                     App.hideLoading();
                     return;
                 }
@@ -483,116 +834,282 @@
 
                 const { lookback, confidence } = App.state.settings;
 
-                // 1. Calc total VaR and component VaR
                 const varResult = App.calculateVaRForDate(dateIndex, lookback, confidence, null, true);
                 const totalVaR = varResult.total;
                 const fundVaR = App.calculateVaRForDate(dateIndex, lookback, confidence, 'fund');
                 const fxVaR = App.calculateVaRForDate(dateIndex, lookback, confidence, 'fx');
 
-                // 2. Calc historical 1Y range statistics (sample every 2 days for performance)
                 const startRange = Math.max(lookback, dateIndex - 250);
-                const hist = { total: {min: Infinity, max: 0, sum: 0, count: 0}, fund: {min: Infinity, max: 0, sum: 0, count: 0}, fx: {min: Infinity, max: 0, sum: 0, count: 0}, assets: {} };
+                const hist = { 
+                    total: {min: Infinity, max: 0, sum: 0, count: 0}, 
+                    fxTotal: {min: Infinity, max: 0, sum: 0, count: 0}, 
+                    fund: {min: Infinity, max: 0, sum: 0, count: 0},  
+                    fx: {min: Infinity, max: 0, sum: 0, count: 0},    
+                    assets: {}                                        
+                };
                 
                 for (let d = startRange; d <= dateIndex; d += 2) {
                     const rAll = App.calculateVaRForDate(d, lookback, confidence, null, true);
-                    const rFund = App.calculateVaRForDate(d, lookback, confidence, 'fund');
-                    const rFx = App.calculateVaRForDate(d, lookback, confidence, 'fx');
-                    
                     if(!rAll) continue;
 
                     if(rAll.total < hist.total.min) hist.total.min = rAll.total;
                     if(rAll.total > hist.total.max) hist.total.max = rAll.total;
-                    hist.total.sum += rAll.total; hist.total.count++;
+                    hist.total.sum += rAll.total;
+                    hist.total.count++;
 
-                    if(rFund < hist.fund.min) hist.fund.min = rFund;
-                    if(rFund > hist.fund.max) hist.fund.max = rFund;
-                    hist.fund.sum += rFund; hist.fund.count++;
+                    const rFund = App.calculateVaRForDate(d, lookback, confidence, 'fund');
+                    const rFx = App.calculateVaRForDate(d, lookback, confidence, 'fx');
+                    
+                    if(rFx < hist.fxTotal.min) hist.fxTotal.min = rFx;
+                    if(rFx > hist.fxTotal.max) hist.fxTotal.max = rFx;
+                    hist.fxTotal.sum += rFx;
+                    hist.fxTotal.count++;
+                    
+                    let dFundPos = 0;
+                    for (const asset in App.state.assets) {
+                        const p = App.state.assets[asset].positions[d];
+                        if(App.state.assets[asset].type === 'fund' && Math.abs(p) >= 100000) dFundPos += Math.abs(p);
+                    }
 
-                    if(rFx < hist.fx.min) hist.fx.min = rFx;
-                    if(rFx > hist.fx.max) hist.fx.max = rFx;
-                    hist.fx.sum += rFx; hist.fx.count++;
+                    if(dFundPos > 0) {
+                        const fundPct = rFund / dFundPos;
+                        if(fundPct < hist.fund.min) hist.fund.min = fundPct;
+                        if(fundPct > hist.fund.max) hist.fund.max = fundPct;
+                        hist.fund.sum += fundPct;
+                        hist.fund.count++;
+                    }
 
-                    for(let a in rAll.components) {
+                    const usdKey = Object.keys(App.state.assets).find(k => k.toLowerCase().startsWith('usd'));
+                    if (usdKey && App.state.assets[usdKey].positions) {
+                        const rawUsdPosAtD = App.state.assets[usdKey].positions[d];
+                        const absRawUsdPosAtD = Math.abs(rawUsdPosAtD);
+                        if(absRawUsdPosAtD > 0) {
+                            const fxPct = rFx / absRawUsdPosAtD;
+                            if(fxPct < hist.fx.min) hist.fx.min = fxPct;
+                            if(fxPct > hist.fx.max) hist.fx.max = fxPct;
+                            hist.fx.sum += fxPct;
+                            hist.fx.count++;
+                        }
+                    }
+
+                    for(let a in rAll.componentsPct) {
                         if(!hist.assets[a]) hist.assets[a] = {min: Infinity, max: 0, sum: 0, count: 0};
-                        let v = rAll.components[a];
-                        if(v < hist.assets[a].min) hist.assets[a].min = v;
-                        if(v > hist.assets[a].max) hist.assets[a].max = v;
-                        hist.assets[a].sum += v; hist.assets[a].count++;
+                        let vPct = rAll.componentsPct[a];
+                        if(vPct < hist.assets[a].min) hist.assets[a].min = vPct;
+                        if(vPct > hist.assets[a].max) hist.assets[a].max = vPct;
+                        hist.assets[a].sum += vPct;
+                        hist.assets[a].count++;
                     }
                 }
 
                 const calcAvg = (h) => h.count > 0 ? h.sum / h.count : 0;
                 const fixMin = (h) => h.min === Infinity ? 0 : h.min;
 
-                // 3. Summarize positions
-                let totalPos = 0, fundPos = 0, fxPos = 0;
+                let fundPos = 0; 
+                let sumIndVaRAll = 0, sumIndVaRFund = 0, sumIndVaRFx = 0;
                 const fundAssets = [];
                 const fxAssets = [];
                 
+                const usdKey = Object.keys(App.state.assets).find(k => k.toLowerCase().startsWith('usd'));
+                const fxTotalRawPos = (usdKey && App.state.assets[usdKey].positions) ? App.state.assets[usdKey].positions[dateIndex] : 0;
+                
                 for (const asset in App.state.assets) {
                     const pos = App.state.assets[asset].positions[dateIndex];
-                    if (pos > 0) {
-                        totalPos += pos;
+                    const isFund = App.state.assets[asset].type === 'fund';
+                    
+                    if (isFund && Math.abs(pos) < 100000) continue;
+
+                    if (pos !== 0) {
+                        const vAmt = varResult.components[asset] || 0;
+                        sumIndVaRAll += vAmt;
+
                         const aData = {
                             name: asset,
                             position: pos,
-                            varAmt: varResult.components[asset] || 0,
-                            varPct: (varResult.components[asset] || 0) / pos,
-                            min: hist.assets[asset] ? fixMin(hist.assets[asset]) : 0,
-                            max: hist.assets[asset] ? hist.assets[asset].max : 0,
-                            avg: hist.assets[asset] ? calcAvg(hist.assets[asset]) : 0
+                            varAmt: vAmt,
+                            varPct: varResult.componentsPct[asset] || 0,
+                            minPct: hist.assets[asset] ? fixMin(hist.assets[asset]) : 0,
+                            maxPct: hist.assets[asset] ? hist.assets[asset].max : 0,
+                            avgPct: hist.assets[asset] ? calcAvg(hist.assets[asset]) : 0
                         };
 
-                        if (App.state.assets[asset].type === 'fund') {
-                            fundPos += pos;
+                        if (isFund) {
+                            fundPos += Math.abs(pos); 
+                            sumIndVaRFund += vAmt;
                             fundAssets.push(aData);
                         } else {
-                            fxPos += pos;
+                            sumIndVaRFx += vAmt;
                             fxAssets.push(aData);
                         }
                     }
                 }
 
-                fundAssets.sort((a,b) => b.position - a.position);
-                fxAssets.sort((a,b) => b.position - a.position);
+                if (App.state.fundOrder.length === 0) {
+                    fundAssets.sort((a,b) => Math.abs(b.position) - Math.abs(a.position));
+                    App.state.fundOrder = fundAssets.map(a => a.name);
+                } else {
+                    fundAssets.sort((a,b) => {
+                        const idxA = App.state.fundOrder.indexOf(a.name);
+                        const idxB = App.state.fundOrder.indexOf(b.name);
+                        return (idxA !== -1 ? idxA : 999) - (idxB !== -1 ? idxB : 999);
+                    });
+                }
 
-                // Update Table
+                const fxOrderMap = { 'usd': 1, 'eur': 2, 'jpy': 3 };
+                fxAssets.sort((a,b) => {
+                    const aKey = a.name.toLowerCase().substring(0,3);
+                    const bKey = b.name.toLowerCase().substring(0,3);
+                    return (fxOrderMap[aKey] || 99) - (fxOrderMap[bKey] || 99);
+                });
+
+                const divMarket = sumIndVaRAll > 0 ? ((sumIndVaRAll - totalVaR) / sumIndVaRAll) * 100 : 0;
+                const divFund = sumIndVaRFund > 0 ? ((sumIndVaRFund - fundVaR) / sumIndVaRFund) * 100 : 0;
+                const divFx = sumIndVaRFx > 0 ? ((sumIndVaRFx - fxVaR) / sumIndVaRFx) * 100 : 0;
+
+                const footnotes = [];
+                const formatDivWithFloor = (divValue, label) => {
+                    if (divValue < 0) {
+                        footnotes.push(`* ${label} Diversification Effect was originally ${App.formatDiv(divValue)}.`);
+                        return '0.0%*';
+                    }
+                    return App.formatDiv(divValue);
+                };
+
+                const divMarketText = formatDivWithFloor(divMarket, 'Total Market');
+                const divFundText = formatDivWithFloor(divFund, 'Total Fund');
+                const divFxText = formatDivWithFloor(divFx, 'Total FX');
+
+                const fnContainer = document.getElementById('div-footnotes');
+                if (footnotes.length > 0) {
+                    fnContainer.innerHTML = footnotes.map(fn => `<div>${fn}</div>`).join('');
+                    fnContainer.classList.remove('hidden');
+                } else {
+                    fnContainer.innerHTML = '';
+                    fnContainer.classList.add('hidden');
+                }
+
                 const tbody = document.getElementById('detail-table-body');
                 tbody.innerHTML = '';
                 
-                const buildRow = (name, isBold, pos, vAmt, min, max, avg, icon, paddingClass, bgClass) => {
+                const buildRow = (name, isBold, posText, vAmt, propText, pctText, rangeMarkup, divText, icon, paddingClass, bgClass, dragData = null) => {
                     const tr = document.createElement('tr');
                     tr.className = `${bgClass} transition`;
+                    
+                    if (dragData) {
+                        tr.setAttribute('draggable', true);
+                        tr.setAttribute('data-name', dragData);
+                        tr.addEventListener('dragstart', App.handleDragStart);
+                        tr.addEventListener('dragover', App.handleDragOver);
+                        tr.addEventListener('drop', App.handleDrop);
+                        tr.addEventListener('dragenter', App.handleDragEnter);
+                        tr.addEventListener('dragleave', App.handleDragLeave);
+                        icon = `<i class="fa-solid fa-grip-vertical text-slate-300 mr-3 cursor-grab hover:text-slate-500"></i>` + icon;
+                    }
+
                     const nameCell = `<div class="flex items-center ${paddingClass}">${icon}<span class="${isBold ? 'font-bold text-slate-800' : 'text-slate-700'}">${name}</span></div>`;
+                    
+                    const varMarkup = `
+                        <div class="flex justify-end items-center">
+                            <span class="${isBold ? 'font-bold text-slate-900' : 'font-medium text-slate-800'}">${App.formatAmt(vAmt)}</span>
+                            <div class="w-[45px] text-right text-[10px] text-slate-400 ml-2 inline-block shrink-0">${propText !== null ? `(${propText}%)` : ''}</div>
+                        </div>
+                    `;
+
                     tr.innerHTML = `
-                        <td class="px-6 py-3 whitespace-nowrap text-sm border-b border-slate-100">${nameCell}</td>
-                        <td class="px-6 py-3 whitespace-nowrap text-sm text-right font-medium text-slate-700 border-b border-slate-100">${App.formatAmt(pos)}</td>
-                        <td class="px-6 py-3 whitespace-nowrap text-sm text-right ${isBold ? 'font-bold text-slate-900' : 'font-medium text-slate-800'} border-b border-slate-100">${App.formatAmt(vAmt)}</td>
-                        <td class="px-6 py-3 whitespace-nowrap text-sm text-right text-slate-500 border-b border-slate-100">${App.formatPct(vAmt/pos)}</td>
-                        <td class="px-6 py-3 whitespace-nowrap text-sm border-b border-slate-100">${App.renderRangeBar(min, max, avg, vAmt)}</td>
+                        <td class="px-4 py-2.5 whitespace-nowrap text-sm border-b border-slate-100">${nameCell}</td>
+                        <td class="px-4 py-2.5 whitespace-nowrap text-sm text-right font-medium text-slate-700 border-b border-slate-100">${posText}</td>
+                        <td class="px-4 py-2.5 whitespace-nowrap text-sm border-b border-slate-100 p-0 pr-4">${varMarkup}</td>
+                        <td class="px-4 py-2.5 whitespace-nowrap text-sm text-right text-slate-500 border-b border-slate-100">${pctText}</td>
+                        <td class="px-4 py-2.5 whitespace-nowrap text-sm border-b border-slate-100 text-center">${rangeMarkup}</td>
+                        <td class="px-4 py-2.5 whitespace-nowrap text-sm text-right font-medium text-indigo-600 border-b border-slate-100">${divText}</td>
                     `;
                     return tr;
                 };
 
-                // Insert Total Row
-                tbody.appendChild(buildRow('Total Market VaR', true, totalPos, totalVaR, fixMin(hist.total), hist.total.max, calcAvg(hist.total), '<i class="fa-solid fa-earth-americas text-primary mr-2"></i>', '', 'bg-slate-100'));
+                tbody.appendChild(buildRow(
+                    'Total Market VaR', 
+                    true, 
+                    '-', 
+                    totalVaR,
+                    null,
+                    '-', 
+                    App.renderRangeBarAmt(fixMin(hist.total), hist.total.max, calcAvg(hist.total), totalVaR), 
+                    divMarketText,
+                    '<i class="fa-solid fa-earth-americas text-primary mr-2"></i>', 
+                    '', 
+                    'bg-slate-100'
+                ));
                 
-                // Insert Fund Section
-                tbody.appendChild(buildRow('Total Fund VaR', true, fundPos, fundVaR, fixMin(hist.fund), hist.fund.max, calcAvg(hist.fund), '<i class="fa-solid fa-layer-group text-primary mr-2 text-sm"></i>', 'pl-4', 'bg-blue-50/40'));
-                fundAssets.forEach(a => tbody.appendChild(buildRow(a.name, false, a.position, a.varAmt, a.min, a.max, a.avg, '<i class="fa-solid fa-cube text-slate-400 mr-2 text-xs"></i>', 'pl-10', 'hover:bg-slate-50 bg-white')));
+                tbody.appendChild(buildRow(
+                    'Total Fund VaR', 
+                    true, 
+                    App.formatPos(fundPos), 
+                    fundVaR,
+                    null,
+                    App.formatPct(fundPos !== 0 ? fundVaR/Math.abs(fundPos) : 0), 
+                    App.renderRangeBarPct(fixMin(hist.fund), hist.fund.max, calcAvg(hist.fund), fundPos !== 0 ? fundVaR/Math.abs(fundPos) : 0), 
+                    divFundText,
+                    '<i class="fa-solid fa-layer-group text-primary mr-2 text-sm"></i>', 
+                    'pl-4', 
+                    'bg-slate-100'
+                ));
 
-                // Insert FX Section
-                tbody.appendChild(buildRow('Total FX VaR', true, fxPos, fxVaR, fixMin(hist.fx), hist.fx.max, calcAvg(hist.fx), '<i class="fa-solid fa-coins text-success mr-2 text-sm"></i>', 'pl-4', 'bg-green-50/40'));
-                fxAssets.forEach(a => tbody.appendChild(buildRow(a.name, false, a.position, a.varAmt, a.min, a.max, a.avg, '<i class="fa-solid fa-money-bill-1-wave text-slate-400 mr-2 text-xs"></i>', 'pl-10', 'hover:bg-slate-50 bg-white')));
+                fundAssets.forEach(a => {
+                    const propText = fundVaR > 0 ? Math.round((a.varAmt / fundVaR) * 100) : 0;
+                    
+                    tbody.appendChild(buildRow(
+                        a.name, 
+                        false, 
+                        App.formatPos(a.position), 
+                        a.varAmt,
+                        propText, 
+                        App.formatPct(a.varPct), 
+                        App.renderRangeBarPct(a.minPct, a.maxPct, a.avgPct, a.varPct), 
+                        '-',
+                        '<i class="fa-solid fa-cube text-slate-400 mr-2 text-xs"></i>', 
+                        'pl-8', 
+                        'hover:bg-slate-50 bg-white',
+                        a.name
+                    ));
+                });
 
-                // Generate MoM Analysis
+                tbody.appendChild(buildRow(
+                    'Total FX VaR', 
+                    true, 
+                    '-', 
+                    fxVaR,
+                    null,
+                    '-', 
+                    App.renderRangeBarAmt(fixMin(hist.fxTotal), hist.fxTotal.max, calcAvg(hist.fxTotal), fxVaR), 
+                    divFxText,
+                    '<i class="fa-solid fa-coins text-success mr-2 text-sm"></i>', 
+                    'pl-4', 
+                    'bg-slate-100'
+                ));
+
+                fxAssets.forEach(a => {
+                    tbody.appendChild(buildRow(
+                        a.name, 
+                        false, 
+                        App.formatPos(a.position), 
+                        a.varAmt,
+                        null, 
+                        App.formatPct(a.varPct), 
+                        App.renderRangeBarPct(a.minPct, a.maxPct, a.avgPct, a.varPct), 
+                        '-',
+                        '<i class="fa-solid fa-money-bill-1-wave text-slate-400 mr-2 text-xs"></i>', 
+                        'pl-14', 
+                        'hover:bg-slate-50 bg-white'
+                    ));
+                });
+
                 App.generateMoMAnalysis(dateIndex, totalVaR, [...fundAssets, ...fxAssets]);
 
-                App.hideLoading();
+                App.replaceIcons();
+                if (!skipLoading) App.hideLoading();
             },
 
             generateMoMAnalysis: (currDateIndex, currTotalVaR, currentRows) => {
-                // Find 21 days ago (approx 1 business month)
                 const prevDateIndex = Math.max(App.state.settings.lookback, currDateIndex - 21);
                 const prevTotalVaR = App.calculateVaRForDate(prevDateIndex, App.state.settings.lookback, App.state.settings.confidence);
                 const prevDateStr = App.state.dates[prevDateIndex];
@@ -606,7 +1123,6 @@
                     text += `Compared to last month (${prevDateStr}) at $${App.formatAmt(prevTotalVaR)}M, the total portfolio risk has <span class="font-bold ${colorClass}">${direction} by ${Math.abs(pctChange).toFixed(2)}%</span>.`;
                 }
 
-                // Find top contributor
                 if (currentRows.length > 0) {
                     const topContributor = currentRows.reduce((prev, current) => (prev.varAmt > current.varAmt) ? prev : current);
                     text += `<br>The highest risk contributor currently is <strong>${topContributor.name}</strong>, with a standalone VaR of $${App.formatAmt(topContributor.varAmt)}M (representing ${App.formatPct(topContributor.varPct)} of its exposure).`;
@@ -615,32 +1131,31 @@
                 document.getElementById('analysis-text').innerHTML = text;
             },
 
-            // --- Trend Chart ---
+            // --- Historical Chart ---
             renderTrendChart: async () => {
-                App.showLoading();
-                await new Promise(r => setTimeout(r, 50)); 
-
                 const { lookback, confidence } = App.state.settings;
-                const dateStr = document.getElementById('trend-as-of-date').value || App.state.dates[App.state.dates.length - 1];
-                let endDateIdx = App.state.dates.indexOf(dateStr);
+                const endStr = document.getElementById('hist-end-date').value;
+                let endDateIdx = App.state.dates.indexOf(endStr);
                 
                 if (endDateIdx === -1 || endDateIdx < lookback) {
-                    alert("Invalid date or insufficient history for trend.");
                     endDateIdx = App.state.dates.length - 1;
-                    document.getElementById('trend-as-of-date').value = App.state.dates[endDateIdx];
                 }
 
-                // Trailing 250 days data
-                const startIdx = Math.max(lookback, endDateIdx - 250);
+                const startStr = document.getElementById('hist-start-date').value;
+                let startDateIdx = App.state.dates.indexOf(startStr);
+                if (startDateIdx === -1 || startDateIdx < lookback || startDateIdx > endDateIdx) {
+                    startDateIdx = Math.max(lookback, endDateIdx - 250);
+                }
                 
                 const labels = [];
                 const totalData = [];
                 const fundData = [];
                 const fxData = [];
 
-                // Sample every 5 days for performance
-                const step = 5; 
-                for (let i = startIdx; i <= endDateIdx; i += step) {
+                const rangeDays = endDateIdx - startDateIdx;
+                const step = rangeDays > 100 ? 5 : 1; 
+
+                for (let i = startDateIdx; i <= endDateIdx; i += step) {
                     labels.push(App.state.dates[i]);
                     totalData.push(App.calculateVaRForDate(i, lookback, confidence) / 1e6);
                     fundData.push(App.calculateVaRForDate(i, lookback, confidence, 'fund') / 1e6);
@@ -688,6 +1203,7 @@
                         responsive: true,
                         maintainAspectRatio: false,
                         interaction: { mode: 'index', intersect: false },
+                        animation: { duration: 0 },
                         plugins: {
                             tooltip: { callbacks: { label: function(context) { return context.dataset.label + ': $' + context.parsed.y.toFixed(2) + 'M'; } } }
                         },
@@ -697,8 +1213,6 @@
                         }
                     }
                 });
-
-                App.hideLoading();
             },
 
             // --- Settings ---
@@ -706,76 +1220,138 @@
                 App.state.settings.lambda = parseFloat(document.getElementById('set-lambda').value);
                 App.state.settings.lookback = parseInt(document.getElementById('set-lookback').value);
                 App.state.settings.confidence = parseFloat(document.getElementById('set-confidence').value);
+                App.state.settings.posDecimals = parseInt(document.getElementById('set-pos-decimals').value);
                 
                 App.precalculateEWMA();
                 App.updateDashboard();
-                if(document.getElementById('trend').classList.contains('active')) {
+                if(document.getElementById('historical').classList.contains('active')) {
                     App.renderTrendChart();
                 }
                 alert('Settings saved and recalculated successfully!');
             },
 
             // --- Data Processing & Simulation ---
-            
-            // Time alignment and unit calculation
             processDataAlignments: () => {
-                // Sort and deduplicate dates
                 App.state.dates = [...new Set(App.state.dates)].sort();
                 const totalDays = App.state.dates.length;
                 const dateToIndex = {};
                 App.state.dates.forEach((d, i) => dateToIndex[d] = i);
 
-                // Calc Returns & Positions
                 for (const assetName in App.state.assets) {
                     const asset = App.state.assets[assetName];
                     const positions = new Array(totalDays).fill(0);
                     const prices = new Array(totalDays).fill(0);
                     const returns = new Array(totalDays).fill(0);
 
-                    // Forward fill prices & basic calculations
-                    let lastPrice = asset.rawPrices[App.state.dates[0]] || 100;
-                    let currentUnits = 0;
+                    let lastPrice = 100; 
+                    let prevFundPos = 0;
+                    let currentFxPosMillions = 0;
 
                     for (let i = 0; i < totalDays; i++) {
                         const date = App.state.dates[i];
                         
-                        // Price handling
-                        if (asset.rawPrices[date]) {
-                            lastPrice = asset.rawPrices[date];
-                        }
-                        prices[i] = lastPrice;
-
-                        // Calculate returns (log return)
-                        if (i > 0) {
-                            returns[i] = Math.log(prices[i] / prices[i - 1]) || 0;
-                        }
-
-                        // Position & Units handling
                         if (asset.type === 'fund') {
-                            // Fund uses units based on Deposit/Withdraw
+                            let dep = 0, wd = 0;
                             if (asset.transactions[date]) {
                                 asset.transactions[date].forEach(tx => {
-                                    if (tx.field === 'Deposit') currentUnits += tx.amount / prices[i];
-                                    if (tx.field === 'Withdraw') currentUnits -= tx.amount / prices[i];
-                                    // NAV field is already handled in rawPrices
+                                    const f = tx.field.toLowerCase();
+                                    if (f === 'deposit') dep += tx.amount;
+                                    if (f === 'withdraw') wd += tx.amount;
                                 });
                             }
-                            positions[i] = currentUnits * prices[i];
+
+                            let currentPos = prevFundPos;
+                            // 1. NAV represents exact total Position in USD
+                            if (asset.rawPrices[date] !== undefined) {
+                                currentPos = asset.rawPrices[date];
+                            } else if (i > 0) {
+                                // If no NAV given, adjust based on cashflows
+                                currentPos = prevFundPos + dep - wd;
+                            } else {
+                                // First day, no NAV, but might have deposit
+                                currentPos = dep - wd;
+                            }
+
+                            // Calculate Simple Return (Pt / Pt-1 - 1)
+                            let ret = 0;
+                            if (prevFundPos > 0) {
+                                let perfValue = currentPos - dep + wd;
+                                if (perfValue > 0) {
+                                    ret = (perfValue / prevFundPos) - 1;
+                                }
+                            }
+
+                            positions[i] = currentPos;
+                            returns[i] = ret;
+                            // Rebuild price index based on exact simple returns
+                            prices[i] = i === 0 ? 100 : prices[i - 1] * (1 + ret); 
+
+                            prevFundPos = currentPos;
+
                         } else if (asset.type === 'fx') {
-                            // FX uses direct position amounts given in market data alignment
-                            let pos = asset.rawPositions[date] !== undefined ? asset.rawPositions[date] : (i>0 ? positions[i-1] : 0);
-                            positions[i] = pos;
+                            if (asset.rawPositions[date] !== undefined) {
+                                currentFxPosMillions = asset.rawPositions[date];
+                            }
+                            
+                            if (asset.rawPrices[date] !== undefined) {
+                                lastPrice = asset.rawPrices[date];
+                            }
+                            prices[i] = lastPrice;
+
+                            // Calculate Simple Return (Pt / Pt-1 - 1)
+                            if (i > 0) {
+                                let ret = (prices[i] / prices[i - 1]) - 1;
+                                // Invert return for JPY exact formula for simple return: (P_{t-1} / P_t) - 1
+                                if (assetName.toLowerCase().startsWith('jpy') && prices[i] > 50) {
+                                    ret = (prices[i - 1] / prices[i]) - 1; 
+                                }
+                                returns[i] = ret;
+                            }
+
+                            const assetNameLower = assetName.toLowerCase();
+                            
+                            // Convert Native Millions to USD based on FX rules
+                            if (assetNameLower.startsWith('usd')) {
+                                positions[i] = currentFxPosMillions * 1e6; // USD millions to USD
+                            } else if (assetNameLower.startsWith('eur')) {
+                                positions[i] = currentFxPosMillions * 1e6 * prices[i]; // EUR millions * (EUR/USD)
+                            } else if (assetNameLower.startsWith('jpy')) {
+                                positions[i] = prices[i] ? (currentFxPosMillions * 1e6) / prices[i] : 0; // JPY millions / (JPY/USD)
+                            } else {
+                                positions[i] = currentFxPosMillions * 1e6;
+                            }
                         }
                     }
 
                     asset.prices = prices;
                     asset.returns = returns;
                     asset.positions = positions;
+                    asset.portfolioPositions = [...positions]; // Initialize portfolio positions
+                }
+
+                // Isolate USD component from EUR/JPY for precise FX Simulation, while keeping the original Raw Net USD available
+                const usdKey = Object.keys(App.state.assets).find(k => k.toLowerCase().startsWith('usd'));
+                const eurKey = Object.keys(App.state.assets).find(k => k.toLowerCase().startsWith('eur'));
+                const jpyKey = Object.keys(App.state.assets).find(k => k.toLowerCase().startsWith('jpy'));
+
+                const usdAsset = usdKey ? App.state.assets[usdKey] : null;
+                const eurAsset = eurKey ? App.state.assets[eurKey] : null;
+                const jpyAsset = jpyKey ? App.state.assets[jpyKey] : null;
+
+                if (usdAsset && eurAsset && jpyAsset) {
+                    for (let i = 0; i < totalDays; i++) {
+                        const rawUsdPos = usdAsset.positions[i];
+                        const rawEurPos = eurAsset.positions[i];
+                        const rawJpyPos = jpyAsset.positions[i];
+                        
+                        // Overwrite PORTFOLIO position for VaR Engine -> Isolate USD
+                        // (Since long EUR/JPY equals short USD leg internally)
+                        usdAsset.portfolioPositions[i] = rawUsdPos + rawEurPos + rawJpyPos;
+                    }
                 }
             },
 
             generateMockData: async () => {
-                // Generate business days for the past 800 days
                 const dates = [];
                 let d = new Date('2023-01-01');
                 const endDate = new Date('2026-05-01');
@@ -798,51 +1374,64 @@
                     'JPY (vs USD)': { type: 'fx', rawPrices: {}, transactions: {}, rawPositions: {} }
                 };
 
-                // Random walk generation function
-                const generateRandomWalk = (start, vol, drift) => {
-                    let val = start;
-                    const res = [];
-                    for(let i=0; i<dates.length; i++) {
-                        const u1 = Math.random(), u2 = Math.random();
-                        const z = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2); // Box-Muller
-                        val = val * Math.exp(drift - 0.5 * vol * vol + vol * z);
-                        res.push(val);
-                    }
-                    return res;
-                };
-
-                // Generate price series for each asset
                 const fundVols = [0.012, 0.018, 0.015, 0.003, 0.006];
+                const startNavs = [15000000, 8000000, 12000000, 20000000, 5000000];
+                
                 ['Global Equity Fund', 'Tech Growth Fund', 'Emerging Market Fund', 'US Treasury Fund', 'High Yield Bond Fund'].forEach((f, i) => {
-                    const prices = generateRandomWalk(100, fundVols[i], 0.0002);
-                    dates.forEach((d, idx) => { App.state.assets[f].rawPrices[d] = prices[idx]; });
-                    
-                    // Simulate transactions (Deposit/Withdraw)
-                    App.state.assets[f].transactions[dates[10]] = [{field: 'Deposit', amount: (i+1)*5_000_000}]; // Initial injection
-                    if(i % 2 === 0) App.state.assets[f].transactions[dates[300]] = [{field: 'Deposit', amount: 2_000_000}];
-                    if(i % 3 === 0) App.state.assets[f].transactions[dates[500]] = [{field: 'Withdraw', amount: 1_000_000}];
+                    let currentNav = startNavs[i];
+                    dates.forEach((d, idx) => { 
+                        let vol = fundVols[i];
+                        let ret = (0.0002 - 0.5 * vol * vol) + vol * (Math.sqrt(-2.0 * Math.log(Math.random())) * Math.cos(2.0 * Math.PI * Math.random()));
+                        currentNav = currentNav * Math.exp(ret);
+                        
+                        if(idx === 10) {
+                            App.state.assets[f].transactions[d] = [{field: 'Deposit', amount: 5000000}];
+                            currentNav += 5000000;
+                        }
+                        if(idx === 300 && i % 2 === 0) {
+                            App.state.assets[f].transactions[d] = [{field: 'Deposit', amount: 2000000}];
+                            currentNav += 2000000;
+                        }
+                        if(idx === 500 && i % 3 === 0) {
+                            App.state.assets[f].transactions[d] = [{field: 'Withdraw', amount: 1000000}];
+                            currentNav -= 1000000;
+                        }
+
+                        App.state.assets[f].rawPrices[d] = currentNav; 
+                    });
                 });
 
-                // Generate FX data
-                const usdPrices = generateRandomWalk(31.5, 0.004, 0); // USD/TWD
-                const eurPrices = generateRandomWalk(1.08, 0.005, 0); // EUR/USD
-                const jpyPrices = generateRandomWalk(150, 0.006, 0); // JPY/USD Volatility proxy
+                const usdPrices = generateRandomWalk(31.5, 0.004, 0); 
+                const eurPrices = generateRandomWalk(1.08, 0.005, 0); 
+                const jpyPrices = generateRandomWalk(150, 0.006, 0); 
 
                 dates.forEach((d, idx) => {
                     App.state.assets['USD (vs TWD)'].rawPrices[d] = usdPrices[idx];
                     App.state.assets['EUR (vs USD)'].rawPrices[d] = eurPrices[idx];
                     App.state.assets['JPY (vs USD)'].rawPrices[d] = jpyPrices[idx]; 
 
-                    // Fixed Positions
-                    App.state.assets['USD (vs TWD)'].rawPositions[d] = 12_000_000;
-                    App.state.assets['EUR (vs USD)'].rawPositions[d] = 5_000_000;
-                    App.state.assets['JPY (vs USD)'].rawPositions[d] = 3_500_000;
+                    App.state.assets['USD (vs TWD)'].rawPositions[d] = -12; // Short USD
+                    App.state.assets['EUR (vs USD)'].rawPositions[d] = 5;  // Long EUR
+                    App.state.assets['JPY (vs USD)'].rawPositions[d] = 600; // Long JPY 
                 });
+
+                function generateRandomWalk(start, vol, drift) {
+                    let val = start;
+                    const res = [];
+                    for(let i=0; i<dates.length; i++) {
+                        const u1 = Math.random(), u2 = Math.random();
+                        const z = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+                        val = val * Math.exp(drift - 0.5 * vol * vol + vol * z);
+                        res.push(val);
+                    }
+                    return res;
+                }
             },
 
             resetToMockData: async () => {
                 document.getElementById('data-preview-container').classList.add('hidden');
                 App.state.rawData = { fund: null, fxPos: null, fxMkt: null };
+                App.state.fundOrder = []; // Reset drag and drop
                 await App.init();
                 document.querySelector('[data-target="dashboard"]').click();
             },
@@ -865,21 +1454,21 @@
                     const fxPosDataRaw = await App.readExcel(fxPosFile);
                     const fxMktDataRaw = await App.readExcel(fxMktFile);
 
-                    // Store raw data for preview and copy
                     App.state.rawData.fund = fundDataRaw;
                     App.state.rawData.fxPos = fxPosDataRaw;
                     App.state.rawData.fxMkt = fxMktDataRaw;
 
-                    // Re-initialize State
                     App.state.dates = [];
                     App.state.assets = {};
+                    App.state.fundOrder = []; // Reset sorting config
 
-                    // 1. Process Fund Data
-                    // Columns: Date, Fund, Field, Amount
                     fundDataRaw.forEach(row => {
                         const date = App.formatDateExcel(row.Date || row.date);
                         const fund = row.Fund || row.fund;
-                        const field = row.Field || row.field;
+                        const fieldRaw = row.Field || row.field;
+                        if (!fieldRaw) return;
+                        
+                        const field = fieldRaw.toString().trim().toLowerCase();
                         const amount = parseFloat(row.Amount || row.amount);
 
                         if(!date || !fund || isNaN(amount)) return;
@@ -889,20 +1478,21 @@
                             App.state.assets[fund] = { type: 'fund', rawPrices: {}, transactions: {}, rawPositions: {} };
                         }
 
-                        if (field === 'NAV') {
+                        if (field === 'nav') {
                             App.state.assets[fund].rawPrices[date] = amount;
-                        } else if (field === 'Deposit' || field === 'Withdraw') {
+                        } else if (['deposit', 'withdraw'].includes(field)) {
                             if (!App.state.assets[fund].transactions[date]) App.state.assets[fund].transactions[date] = [];
-                            App.state.assets[fund].transactions[date].push({ field, amount });
+                            App.state.assets[fund].transactions[date].push({ field: field, amount });
                         }
                     });
 
-                    // 2. Process FX Market Data
-                    // Columns: Date, USD, EUR, JPY
-                    const fxNames = ['USD', 'EUR', 'JPY'];
-                    fxNames.forEach(fx => {
-                        if (!App.state.assets[fx]) {
-                            App.state.assets[fx] = { type: 'fx', rawPrices: {}, transactions: {}, rawPositions: {} };
+                    const fxHeaders = ['USD', 'EUR', 'JPY'];
+                    const fxNameMap = { 'USD': 'USD (vs TWD)', 'EUR': 'EUR (vs USD)', 'JPY': 'JPY (vs USD)' };
+
+                    fxHeaders.forEach(fx => {
+                        const mappedName = fxNameMap[fx];
+                        if (!App.state.assets[mappedName]) {
+                            App.state.assets[mappedName] = { type: 'fx', rawPrices: {}, transactions: {}, rawPositions: {} };
                         }
                     });
 
@@ -911,31 +1501,30 @@
                         if(!date) return;
                         App.state.dates.push(date);
 
-                        fxNames.forEach(fx => {
+                        fxHeaders.forEach(fx => {
+                            const mappedName = fxNameMap[fx];
                             if (row[fx] !== undefined) {
-                                App.state.assets[fx].rawPrices[date] = parseFloat(row[fx]);
+                                App.state.assets[mappedName].rawPrices[date] = parseFloat(row[fx]);
                             }
                         });
                     });
 
-                    // 3. Process FX Position Data
                     fxPosDataRaw.forEach(row => {
                         const date = App.formatDateExcel(row.Date || row.date);
                         if(!date) return;
                         App.state.dates.push(date);
 
-                        fxNames.forEach(fx => {
+                        fxHeaders.forEach(fx => {
+                            const mappedName = fxNameMap[fx];
                             if (row[fx] !== undefined) {
-                                App.state.assets[fx].rawPositions[date] = parseFloat(row[fx]);
+                                App.state.assets[mappedName].rawPositions[date] = parseFloat(row[fx]);
                             }
                         });
                     });
 
-                    // Recalculate
                     App.processDataAlignments();
                     App.precalculateEWMA();
                     
-                    // Set dates to the latest
                     const lastDateStr = App.state.dates[App.state.dates.length - 1];
                     const minDateStr = App.state.dates[App.state.settings.lookback];
                     
@@ -943,11 +1532,18 @@
                     document.getElementById('as-of-date').min = minDateStr;
                     document.getElementById('as-of-date').value = lastDateStr;
                     
-                    document.getElementById('trend-as-of-date').max = lastDateStr;
-                    document.getElementById('trend-as-of-date').min = minDateStr;
-                    document.getElementById('trend-as-of-date').value = lastDateStr;
+                    const startSlider = document.getElementById('hist-start-slider');
+                    const endSlider = document.getElementById('hist-end-slider');
+                    startSlider.max = App.state.dates.length - 1;
+                    endSlider.max = App.state.dates.length - 1;
+                    startSlider.min = App.state.settings.lookback;
+                    endSlider.min = App.state.settings.lookback;
 
-                    // Show preview
+                    let startIdx = Math.max(App.state.settings.lookback, App.state.dates.length - 250);
+                    startSlider.value = startIdx;
+                    endSlider.value = App.state.dates.length - 1;
+                    App.syncSlidersToDates('init');
+
                     document.getElementById('data-preview-container').classList.remove('hidden');
                     App.renderPreview('fund', fundDataRaw);
                     App.renderPreview('fxPos', fxPosDataRaw);
@@ -987,19 +1583,16 @@
 
             formatDateExcel: (excelDate) => {
                 if (typeof excelDate === 'string') {
-                    // String date like YYYY/MM/DD
                     const d = new Date(excelDate);
                     if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
                     return null;
                 } else if (typeof excelDate === 'number') {
-                    // Excel serial date
                     const d = new Date(Math.round((excelDate - 25569) * 86400 * 1000));
                     return d.toISOString().split('T')[0];
                 }
                 return null;
             },
 
-            // Update file name display for drag and drop
             updateFileName: (input, displayId) => {
                 const displayElement = document.getElementById(displayId);
                 if (input.files && input.files.length > 0) {
@@ -1011,90 +1604,53 @@
                     displayElement.classList.remove('text-primary');
                     displayElement.classList.add('text-slate-400');
                 }
+            },
+
+            icons: {
+                'fa-chart-line': '<svg class="w-full h-full" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>',
+                'fa-border-all': '<svg class="w-full h-full" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>',
+                'fa-chart-area': '<svg class="w-full h-full" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 12l4-4 4 4 6-6v10H3z"/></svg>',
+                'fa-file-arrow-up': '<svg class="w-full h-full" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 18v-6"/><path d="M9 15l3-3 3 3"/></svg>',
+                'fa-gear': '<svg class="w-full h-full" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>',
+                'fa-wand-magic-sparkles': '<svg class="w-full h-full" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.2 3.8L12 12l-2-2L18.2 1.8z"/><path d="M4 20l4-4"/><path d="M2 12h4"/><path d="M12 2v4"/><path d="M20 16h2"/><path d="M16 20v2"/></svg>',
+                'fa-arrows-rotate': '<svg class="w-full h-full" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>',
+                'fa-download': '<svg class="w-full h-full" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
+                'fa-cloud-arrow-up': '<svg class="w-full h-full" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 16.2A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.3"/><polyline points="16 11 12 7 8 11"/><line x1="12" y1="15" x2="12" y2="7"/></svg>',
+                'fa-table': '<svg class="w-full h-full" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>',
+                'fa-copy': '<svg class="w-full h-full" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
+                'fa-earth-americas': '<svg class="w-full h-full" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>',
+                'fa-layer-group': '<svg class="w-full h-full" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 12 12 17 22 12"/><polyline points="2 17 12 22 22 17"/></svg>',
+                'fa-cube': '<svg class="w-full h-full" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>',
+                'fa-coins': '<svg class="w-full h-full" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="M16.71 13.88l-1.42 1.42"/></svg>',
+                'fa-money-bill-1-wave': '<svg class="w-full h-full" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/></svg>',
+                'fa-1': '<svg class="w-full h-full" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v8"/><path d="M10 10l2-2"/></svg>',
+                'fa-2': '<svg class="w-full h-full" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M10 10c0-1.1.9-2 2-2s2 .9 2 2c0 2-4 3-4 5h4"/></svg>',
+                'fa-3': '<svg class="w-full h-full" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M10 9c0-1.1.9-2 2-2s2 .9 2 2c0 1.5-1.5 2-1.5 2 0 0 1.5.5 1.5 2s-.9 2-2 2-2-.9-2-2"/></svg>',
+                'fa-grip-vertical': '<svg class="w-full h-full" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg>',
+                'fa-book-open': '<svg class="w-full h-full" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>'
+            },
+
+            replaceIcons: () => {
+                document.querySelectorAll('i.fa-solid, i.fa-regular').forEach(el => {
+                    const classes = el.className.split(' ');
+                    const iconClass = classes.find(c => c.startsWith('fa-') && c !== 'fa-solid' && c !== 'fa-regular');
+                    if (iconClass && App.icons[iconClass]) {
+                        const span = document.createElement('span');
+                        const newClasses = classes.filter(c => !c.startsWith('fa-')).join(' ');
+                        span.className = `inline-block w-[1.1em] h-[1.1em] align-text-bottom ${newClasses}`;
+                        span.innerHTML = App.icons[iconClass];
+                        el.parentNode.replaceChild(span, el);
+                    }
+                });
             }
         };
 
-        // --- UI Helper Methods ---
-        
-        // Render Range Bar (1Y Low---Avg---Current----1Y High)
-        App.renderRangeBar = (min, max, avg, curr) => {
-            const safeRange = max - min === 0 ? 1 : max - min;
-            const avgPct = max - min === 0 ? 50 : Math.max(0, Math.min(100, ((avg - min) / safeRange) * 100));
-            const currPct = max - min === 0 ? 50 : Math.max(0, Math.min(100, ((curr - min) / safeRange) * 100));
-            
-            return `
-                <div class="flex flex-col w-48 ml-auto">
-                    <div class="relative w-full h-1.5 bg-slate-200 rounded mt-1.5">
-                        <div class="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 bg-slate-400 rounded-full shadow-sm z-10" style="left: calc(${avgPct}% - 5px);" title="Average: ${App.formatAmt(avg)}M"></div>
-                        <div class="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-red-500 rounded-full shadow-sm border border-white z-20" style="left: calc(${currPct}% - 6px);" title="Current: ${App.formatAmt(curr)}M"></div>
-                    </div>
-                    <div class="flex justify-between text-[10px] text-slate-400 mt-1.5 font-medium tracking-tight">
-                        <span>${App.formatAmt(min)}</span>
-                        <span>${App.formatAmt(max)}</span>
-                    </div>
-                </div>
-            `;
-        };
-
-        // Generate and download sample Excel file
-        App.downloadSample = (type) => {
-            const wb = XLSX.utils.book_new();
-            let ws_data;
-            if(type === 'fund') {
-                ws_data = [
-                    ['Date', 'Fund', 'Field', 'Amount'],
-                    ['2025-01-02', 'Global Equity Fund', 'Deposit', 10000000],
-                    ['2025-01-03', 'Global Equity Fund', 'NAV', 100.5],
-                    ['2025-01-04', 'Global Equity Fund', 'NAV', 101.2]
-                ];
-            } else if (type === 'fxPos') {
-                ws_data = [
-                    ['Date', 'USD', 'EUR', 'JPY'],
-                    ['2025-01-02', 12000000, 5000000, 3500000],
-                    ['2025-01-03', 12000000, 5000000, 3500000]
-                ];
-            } else {
-                ws_data = [
-                    ['Date', 'USD', 'EUR', 'JPY'],
-                    ['2025-01-02', 31.5, 1.08, 150.0],
-                    ['2025-01-03', 31.6, 1.09, 149.5]
-                ];
+        window.addEventListener('resize', () => {
+            if (App.state.chartInstance && document.getElementById('historical').classList.contains('active')) {
+                App.state.chartInstance.resize();
             }
-            const ws = XLSX.utils.aoa_to_sheet(ws_data);
-            XLSX.utils.book_append_sheet(wb, ws, "Sample");
-            XLSX.writeFile(wb, `Sample_${type}_Data.xlsx`);
-        };
+        });
 
-        // Render Data Preview (TSV format)
-        App.renderPreview = (id, dataArray) => {
-            if (!dataArray || dataArray.length === 0) return;
-            const header = Object.keys(dataArray[0]).join('\t');
-            const rows = dataArray.slice(0, 50).map(obj => Object.values(obj).join('\t')).join('\n'); // Show first 50
-            document.getElementById(`preview-${id}`).textContent = header + '\n' + rows;
-        };
-
-        // Copy Data to Clipboard (Full data)
-        App.copyData = (type) => {
-            const dataArray = App.state.rawData[type];
-            if (!dataArray || dataArray.length === 0) {
-                alert('No data available to copy.'); return;
-            }
-            const header = Object.keys(dataArray[0]).join('\t');
-            const rows = dataArray.map(obj => Object.values(obj).join('\t')).join('\n');
-            const tsv = header + '\n' + rows;
-            
-            // Use temporary textarea for copying
-            const ta = document.createElement('textarea');
-            ta.value = tsv;
-            document.body.appendChild(ta);
-            ta.select();
-            document.execCommand('copy');
-            document.body.removeChild(ta);
-            
-            alert('Copied to clipboard!');
-        };
-
-        // Start App
         window.addEventListener('DOMContentLoaded', () => {
             App.init();
         });
